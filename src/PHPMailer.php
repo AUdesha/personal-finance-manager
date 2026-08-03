@@ -240,7 +240,7 @@ class PHPMailer
      * The hostname to use in the Message-ID header and as default HELO string.
      * If empty, PHPMailer attempts to find one with, in order,
      * $_SERVER['SERVER_NAME'], gethostname(), php_uname('n'), or the value
-    * 'localhost:3307.localdomain'.
+    * 'localhost.localdomain'.
      *
      * @see PHPMailer::$Helo
      *
@@ -280,7 +280,7 @@ class PHPMailer
      *
      * @var string
      */
-    public $Host = 'localhost:3307';
+    public $Host = 'localhost';
 
     /**
      * The default SMTP server port.
@@ -2344,7 +2344,7 @@ class PHPMailer
         $this->smtp->setVerp($this->do_verp);
         $this->smtp->setSMTPUTF8($this->UseSMTPUTF8);
         if ($this->Host === null) {
-            $this->Host = 'localhost:3307';
+            $this->Host = 'localhost';
         }
         $hosts = explode(';', $this->Host);
         $lastexception = null;
@@ -2413,13 +2413,13 @@ class PHPMailer
                     $this->smtp->hello($hello);
                     //Automatically enable TLS encryption if:
                     //* it's not disabled
-                    //* we are not connecting to localhost:3307
+                    //* we are not connecting to localhost
                     //* we have openssl extension
                     //* we are not already using SSL
                     //* the server offers STARTTLS
                     if (
                         $this->SMTPAutoTLS &&
-                        $this->Host !== 'localhost:3307' &&
+                        $this->Host !== 'localhost' &&
                         $sslext &&
                         $secure !== 'ssl' &&
                         $this->smtp->getServerExt('STARTTLS')
@@ -4503,7 +4503,7 @@ class PHPMailer
 
     /**
      * Get the server hostname.
-    * Returns 'localhost:3307.localdomain' if unknown.
+    * Returns 'localhost.localdomain' if unknown.
     *
     * @return string
      */
@@ -4520,7 +4520,7 @@ class PHPMailer
             $result = php_uname('n');
         }
         if (!static::isValidHost($result)) {
-            return 'localhost:3307.localdomain';
+            return 'localhost.localdomain';
         }
 
         return $result;
