@@ -5,15 +5,21 @@
             <button type="button" class="header-menu-toggle notification-menu-toggle" aria-label="Open notifications" aria-expanded="false" data-notification-toggle>
                 <i class="bi bi-bell"></i>
                 <?php
-                $notificationStmt = $conn->prepare("SELECT title, message, type, created_at, is_read FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 5");
-                $notificationStmt->bind_param("i", $_SESSION['user_id']);
-                $notificationStmt->execute();
-                $notificationResult = $notificationStmt->get_result();
-                $unreadCountStmt = $conn->prepare("SELECT COUNT(*) AS total FROM notifications WHERE user_id = ? AND is_read = 0");
-                $unreadCountStmt->bind_param("i", $_SESSION['user_id']);
-                $unreadCountStmt->execute();
-                $notificationCount = (int)$unreadCountStmt->get_result()->fetch_assoc()['total'];
-                $unreadCountStmt->close();
+                // Safely fetch notifications only when a user is logged in and DB connection is available
+                if (isset($_SESSION['user_id']) && isset($conn) && $conn && empty($conn->connect_error)) {
+                    $notificationStmt = $conn->prepare("SELECT title, message, type, created_at, is_read FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 5");
+                    $notificationStmt->bind_param("i", $_SESSION['user_id']);
+                    $notificationStmt->execute();
+                    $notificationResult = $notificationStmt->get_result();
+                    $unreadCountStmt = $conn->prepare("SELECT COUNT(*) AS total FROM notifications WHERE user_id = ? AND is_read = 0");
+                    $unreadCountStmt->bind_param("i", $_SESSION['user_id']);
+                    $unreadCountStmt->execute();
+                    $notificationCount = (int)$unreadCountStmt->get_result()->fetch_assoc()['total'];
+                    $unreadCountStmt->close();
+                } else {
+                    $notificationCount = 0;
+                    $notificationResult = null;
+                }
                 ?>
                 <?php if ($notificationCount > 0): ?><span class="notification-badge"><?php echo $notificationCount; ?></span><?php endif; ?>
             </button>
@@ -30,7 +36,7 @@
                 <?php else: ?>
                     <div class="notification-empty"><i class="bi bi-check-circle"></i> No alerts right now.</div>
                 <?php endif; ?>
-                <?php $notificationStmt->close(); ?>
+                <?php if (isset($notificationStmt) && $notificationStmt) { $notificationStmt->close(); } ?>
             </div>
         </div>
         <div class="profile-menu">

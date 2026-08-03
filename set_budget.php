@@ -193,7 +193,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && (isset($_POST['update_budgets']) || 
             $spendingStmt->bind_param("ii", $user_id, $categoryId);
             $spendingStmt->execute();
             $actual = (float)$spendingStmt->get_result()->fetch_assoc()['total'];
-            $percentage = $limit > 0 ? ($actual / $limit) * 100 : 0;
+            $percentage = $limit > 0 ? ($actual / $limit) * 100 : ($actual > 0 ? 101 : 0);
 
             if ($percentage > 80) {
                 $alertTitle = $percentage > 100 ? 'Budget Overspent' : 'Budget Alert';
@@ -524,6 +524,7 @@ if (isset($_GET['success'])) {
         <a href="add_transaction.php" class="nav-item <?php echo in_array($currentPage, ['add_transaction.php', 'edit_transaction.php'], true) ? 'active' : ''; ?>"><i class="bi bi-plus-circle-fill"></i><span>Add</span></a>
         <a href="transfer.php" class="nav-item <?php echo $currentPage === 'transfer.php' ? 'active' : ''; ?>"><i class="bi bi-arrow-left-right"></i><span>Transfer</span></a>
         <a href="manage_accounts.php" class="nav-item <?php echo $currentPage === 'manage_accounts.php' ? 'active' : ''; ?>"><i class="bi bi-wallet-fill"></i><span>Accounts</span></a>
+        <a href="set_budget.php" class="nav-item <?php echo $currentPage === 'set_budget.php' ? 'active' : ''; ?>"><i class="bi bi-wallet2"></i><span>Budget</span></a>
         <a href="savings_goals.php" class="nav-item <?php echo $currentPage === 'savings_goals.php' ? 'active' : ''; ?>"><i class="bi bi-graph-up-arrow"></i><span>Goals</span></a>
     </div>
 </div>

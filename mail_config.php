@@ -28,17 +28,32 @@ function send_application_email($recipient, $subject, $body, $altBody = '') {
         // SMTP CONFIGURATION - CHANGE THESE VALUES
         // ==========================================
         $mail->isSMTP();
-        $mail->Host       = 'smtp.gmail.com';              // Gmail SMTP server
+        $mail->Host       = getenv('SMTP_HOST') ?: '';
         $mail->SMTPAuth   = true;
-        $mail->Username   = 'businessauj@gmail.com';        // YOUR GMAIL ADDRESS
-        $mail->Password   = 'bwus iwlw eeaf hpqs';         // YOUR 16-CHARACTER APP PASSWORD
+        $mail->Username   = getenv('SMTP_USERNAME') ?: '';
+        $mail->Password   = getenv('SMTP_PASSWORD') ?: '';
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = 587;
+        $mail->Port       = getenv('SMTP_PORT') ?: 587;
+
+        if (empty($mail->Host) || empty($mail->Username) || empty($mail->Password)) {
+            error_log('Mail Error: SMTP configuration incomplete. Set SMTP_HOST, SMTP_USERNAME, and SMTP_PASSWORD.');
+            return false;
+        }
+
+        // Allow self-signed certificates in local/dev environments
+        $mail->SMTPOptions = [
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+                'allow_self_signed' => true,
+            ],
+        ];
 
         // ==========================================
         // SENDER & RECIPIENT
         // ==========================================
-        $mail->setFrom('businessauj@gmail.com', 'Personal Finance Manager');
+        $fromEmail = getenv('SMTP_FROM_EMAIL') ?: $mail->Username;
+        $mail->setFrom($fromEmail, 'Personal Finance Manager');
         $mail->addAddress($recipient);
 
         // ==========================================

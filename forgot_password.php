@@ -14,6 +14,13 @@ $message = '';
 $messageType = '';
 $otpDisplay = '';
 
+// Show any session error (e.g., redirected from reset_password.php)
+if (isset($_SESSION['error'])) {
+    $message = $_SESSION['error'];
+    $messageType = 'danger';
+    unset($_SESSION['error']);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $stmt = $conn->prepare("SELECT user_id, username FROM users WHERE email = ? LIMIT 1");
@@ -52,17 +59,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($mailSent) {
             $message = '✅ OTP sent to your email! Please check your inbox (and spam folder).';
             $messageType = 'success';
-            
-            // Still display OTP on screen for debugging/testing
+
             if (defined('DEMO_MODE') && DEMO_MODE) {
                 $otpDisplay = $otp;
             }
         } else {
-            // Fallback: Display OTP on screen if email fails
-            $otpDisplay = $otp;
-            $message = '⚠️ Email could not be sent. OTP displayed below for demo.';
+            $message = '⚠️ Email could not be sent. Please verify your SMTP settings and try again.';
             $messageType = 'warning';
-            
+
+            if (defined('DEMO_MODE') && DEMO_MODE) {
+                $otpDisplay = $otp;
+            }
+
             // Log the error
             error_log("Failed to send OTP to: $email");
         }

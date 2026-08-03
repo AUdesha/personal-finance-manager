@@ -41,17 +41,17 @@ $category_type = $transaction['category_type'];
 // ==========================================
 if ($category_type == 'INCOME') {
     // Income was ADDED to the account, so SUBTRACT it back
-    $updateBalance = "UPDATE accounts SET current_balance = current_balance - ? WHERE account_id = ?";
+    $updateBalance = "UPDATE accounts SET current_balance = current_balance - ? WHERE account_id = ? AND user_id = ?";
 } else {
     // Expense was SUBTRACTED from the account, so ADD it back
-    $updateBalance = "UPDATE accounts SET current_balance = current_balance + ? WHERE account_id = ?";
+    $updateBalance = "UPDATE accounts SET current_balance = current_balance + ? WHERE account_id = ? AND user_id = ?";
 }
 
 $balanceStmt = $conn->prepare($updateBalance);
-$balanceStmt->bind_param("di", $amount, $account_id);
+$balanceStmt->bind_param("dii", $amount, $account_id, $user_id);
 if (!$balanceStmt->execute()) {
     // If the balance update fails, log the error but still try to delete
-    // You can add error handling here if needed
+    error_log("Failed to update account balance when deleting transaction {$transaction_id}: " . $balanceStmt->error);
 }
 $balanceStmt->close();
 

@@ -1,0 +1,14 @@
+/.env
+
+# Node / build artifacts (optional)
+node_modules/
+vendor/
+/.idea/
+/.vscode/
+uploads/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+*.sql

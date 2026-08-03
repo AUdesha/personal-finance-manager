@@ -69,132 +69,134 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $message = "⚠️ Amount must be greater than 0.";
     } else {
         // ==========================================
-        // STEP 1: GET THE NEW CATEGORY TYPE
+        // STEP 1: VALIDATE NEW ACCOUNT AND CATEGORY OWNERSHIP
         // ==========================================
-        $catTypeStmt = $conn->prepare("SELECT type FROM categories WHERE category_id = ?");
-        $catTypeStmt->bind_param("i", $new_category_id);
+        $catTypeStmt = $conn->prepare("SELECT type FROM categories WHERE category_id = ? AND user_id = ? LIMIT 1");
+        $catTypeStmt->bind_param("ii", $new_category_id, $user_id);
         $catTypeStmt->execute();
         $catTypeResult = $catTypeStmt->get_result();
-        $new_category_type = $catTypeResult->fetch_assoc()['type'];
-        $catTypeStmt->close();
 
-        // ==========================================
-        // STEP 2: REVERSE THE OLD TRANSACTION EFFECT
-        // ==========================================
-        if ($old_category_type == 'INCOME') {
-            // Old was INCOME: it added to the account, so subtract it back
-            $reverseStmt = $conn->prepare("UPDATE accounts SET current_balance = current_balance - ? WHERE account_id = ?");
-            $reverseStmt->bind_param("di", $old_amount, $old_account_id);
-            $reverseStmt->execute();
-            $reverseStmt->close();
+        if ($catTypeResult->num_rows === 0) {
+            $message = "⚠️ The selected category is invalid.";
+            $catTypeStmt->close();
         } else {
-            // Old was EXPENSE: it subtracted from the account, so add it back
-            $reverseStmt = $conn->prepare("UPDATE accounts SET current_balance = current_balance + ? WHERE account_id = ?");
-            $reverseStmt->bind_param("di", $old_amount, $old_account_id);
-            $reverseStmt->execute();
-            $reverseStmt->close();
+            $new_category_type = $catTypeResult->fetch_assoc()['type'];
+            $catTypeStmt->close();
+
+            $accountTypeStmt = $conn->prepare("SELECT account_id FROM accounts WHERE account_id = ? AND user_id = ? LIMIT 1");
+            $accountTypeStmt->bind_param("ii", $new_account_id, $user_id);
+            $accountTypeStmt->execute();
+            $accountTypeResult = $accountTypeStmt->get_result();
+            $accountTypeStmt->close();
+
+            if ($accountTypeResult->num_rows === 0) {
+                $message = "⚠️ The selected account is invalid.";
+            }
         }
 
-        // ==========================================
-        // STEP 3: APPLY THE NEW TRANSACTION EFFECT
-        // ==========================================
-        if ($new_category_type == 'INCOME') {
-            // New is INCOME: add to the account
-            $balanceStmt = $conn->prepare("UPDATE accounts SET current_balance = current_balance + ? WHERE account_id = ?");
-            $balanceStmt->bind_param("di", $new_amount, $new_account_id);
-            $balanceStmt->execute();
-            $balanceStmt->close();
-        } else {
-            // New is EXPENSE: subtract from the account
-            $balanceStmt = $conn->prepare("UPDATE accounts SET current_balance = current_balance - ? WHERE account_id = ?");
-            $balanceStmt->bind_param("di", $new_amount, $new_account_id);
-            $balanceStmt->execute();
-            $balanceStmt->close();
-        }
-
-        // ==========================================
-        // STEP 4: UPDATE THE TRANSACTION RECORD
-        // ==========================================
-        $stmt = $conn->prepare("UPDATE transactions 
-                                SET account_id = ?, 
-                                    category_id = ?, 
-                                    amount = ?, 
-                                    transaction_date = ?, 
-                                    payment_method = ?, 
-                                    note = ? 
-                                WHERE transaction_id = ? AND user_id = ?");
-        $stmt->bind_param("iidsssii", $new_account_id, $new_category_id, $new_amount, $new_date, $new_method, $new_note, $transaction_id, $user_id);
-        
-        if ($stmt->execute()) {
+        if ($message === '') {
             // ==========================================
-            // STEP 5: CHECK FOR BUDGET ALERTS (if new expense)
+            // STEP 2: REVERSE THE OLD TRANSACTION EFFECT
             // ==========================================
-            if ($new_category_type == 'EXPENSE') {
-                $currentMonth = date('Y-m-01');
-                $checkBudget = "SELECT b.monthly_limit, c.category_name 
-                                FROM budgets b 
-                                JOIN categories c ON b.category_id = c.category_id 
-                                WHERE b.user_id = ? 
-                                AND b.category_id = ? 
-                                AND b.month_year = ?";
-                $budgetStmt = $conn->prepare($checkBudget);
-                $budgetStmt->bind_param("iis", $user_id, $new_category_id, $currentMonth);
-                $budgetStmt->execute();
-                $budgetResult = $budgetStmt->get_result();
-                
-                if ($budgetResult->num_rows > 0) {
-                    $budget = $budgetResult->fetch_assoc();
-                    $limit = $budget['monthly_limit'];
-                    
-                    // Get total spent so far this month for this category
-                    $spentStmt = $conn->prepare("SELECT SUM(amount) as total
-                                                  FROM transactions
-                                                  WHERE user_id = ?
-                                                  AND category_id = ?
-                                                  AND MONTH(transaction_date) = MONTH(CURRENT_DATE())
-                                                  AND YEAR(transaction_date) = YEAR(CURRENT_DATE())");
-                    $spentStmt->bind_param("ii", $user_id, $new_category_id);
-                    $spentStmt->execute();
-                    $spentResult = $spentStmt->get_result();
-                    $totalSpent = $spentResult->fetch_assoc()['total'] ?? 0;
-                    $spentStmt->close();
-                    
-                    $percentage = ($totalSpent / $limit) * 100;
-                    
-                    // ==========================================
-                    // STEP 6: INSERT NOTIFICATION (FIXED - Using Prepared Statement)
-                    // ==========================================
-                    if ($percentage > 100) {
-                        // Insert notification: OVERSENT
-                        $notifMsg = "You have EXCEEDED your '{$budget['category_name']}' budget! Spent LKR " . number_format($totalSpent, 2) . " / LKR " . number_format($limit, 2);
-                        $notifTitle = '🚨 Budget Overspent';
-                        $notifType = 'WARNING';
-                        
-                        $notifStmt = $conn->prepare("INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)");
-                        $notifStmt->bind_param("isss", $user_id, $notifTitle, $notifMsg, $notifType);
-                        $notifStmt->execute();
-                        $notifStmt->close();
-                        
-                    } elseif ($percentage > 80) {
-                        // Insert notification: NEARING LIMIT
-                        $notifMsg = "You have used " . round($percentage) . "% of your '{$budget['category_name']}' budget. Limit: LKR " . number_format($limit, 2);
-                        $notifTitle = '⚠️ Budget Alert';
-                        $notifType = 'WARNING';
-                        
-                        $notifStmt = $conn->prepare("INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)");
-                        $notifStmt->bind_param("isss", $user_id, $notifTitle, $notifMsg, $notifType);
-                        $notifStmt->execute();
-                        $notifStmt->close();
-                    }
-                }
+            if ($old_category_type == 'INCOME') {
+                $reverseStmt = $conn->prepare("UPDATE accounts SET current_balance = current_balance - ? WHERE account_id = ? AND user_id = ?");
+                $reverseStmt->bind_param("dii", $old_amount, $old_account_id, $user_id);
+                $reverseStmt->execute();
+                $reverseStmt->close();
+            } else {
+                $reverseStmt = $conn->prepare("UPDATE accounts SET current_balance = current_balance + ? WHERE account_id = ? AND user_id = ?");
+                $reverseStmt->bind_param("dii", $old_amount, $old_account_id, $user_id);
+                $reverseStmt->execute();
+                $reverseStmt->close();
             }
 
-            header("Location: index.php?success=1");
-            exit();
-        } else {
-            $message = "❌ Error: " . $stmt->error;
+            // ==========================================
+            // STEP 3: APPLY THE NEW TRANSACTION EFFECT
+            // ==========================================
+            if ($new_category_type === 'INCOME') {
+                $balanceStmt = $conn->prepare("UPDATE accounts SET current_balance = current_balance + ? WHERE account_id = ? AND user_id = ?");
+                $balanceStmt->bind_param("dii", $new_amount, $new_account_id, $user_id);
+            } else {
+                $balanceStmt = $conn->prepare("UPDATE accounts SET current_balance = current_balance - ? WHERE account_id = ? AND user_id = ?");
+                $balanceStmt->bind_param("dii", $new_amount, $new_account_id, $user_id);
+            }
+            $balanceStmt->execute();
+            $balanceStmt->close();
+
+            // ==========================================
+            // STEP 4: UPDATE THE TRANSACTION RECORD
+            // ==========================================
+            $stmt = $conn->prepare("UPDATE transactions 
+                                    SET account_id = ?, 
+                                        category_id = ?, 
+                                        amount = ?, 
+                                        transaction_date = ?, 
+                                        payment_method = ?, 
+                                        note = ? 
+                                    WHERE transaction_id = ? AND user_id = ?");
+            $stmt->bind_param("iidsssii", $new_account_id, $new_category_id, $new_amount, $new_date, $new_method, $new_note, $transaction_id, $user_id);
+            
+            if ($stmt->execute()) {
+                if ($new_category_type === 'EXPENSE') {
+                    $currentMonth = date('Y-m-01');
+                    $checkBudget = "SELECT b.monthly_limit, c.category_name 
+                                    FROM budgets b 
+                                    JOIN categories c ON b.category_id = c.category_id 
+                                    WHERE b.user_id = ? 
+                                    AND b.category_id = ? 
+                                    AND b.month_year = ?";
+                    $budgetStmt = $conn->prepare($checkBudget);
+                    $budgetStmt->bind_param("iis", $user_id, $new_category_id, $currentMonth);
+                    $budgetStmt->execute();
+                    $budgetResult = $budgetStmt->get_result();
+                    
+                    if ($budgetResult->num_rows > 0) {
+                        $budget = $budgetResult->fetch_assoc();
+                        $limit = (float)$budget['monthly_limit'];
+                        
+                        $spentStmt = $conn->prepare("SELECT SUM(amount) as total
+                                                      FROM transactions
+                                                      WHERE user_id = ?
+                                                      AND category_id = ?
+                                                      AND MONTH(transaction_date) = MONTH(CURRENT_DATE())
+                                                      AND YEAR(transaction_date) = YEAR(CURRENT_DATE())");
+                        $spentStmt->bind_param("ii", $user_id, $new_category_id);
+                        $spentStmt->execute();
+                        $spentResult = $spentStmt->get_result();
+                        $totalSpent = $spentResult->fetch_assoc()['total'] ?? 0;
+                        $spentStmt->close();
+                        
+                        $percentage = $limit > 0 ? ($totalSpent / $limit) * 100 : ($totalSpent > 0 ? 101 : 0);
+                        
+                        if ($percentage > 100) {
+                            $notifMsg = "You have EXCEEDED your '{$budget['category_name']}' budget! Spent LKR " . number_format($totalSpent, 2) . " / LKR " . number_format($limit, 2);
+                            $notifTitle = '🚨 Budget Overspent';
+                            $notifType = 'WARNING';
+                        } elseif ($percentage > 80) {
+                            $notifMsg = "You have used " . round($percentage) . "% of your '{$budget['category_name']}' budget. Limit: LKR " . number_format($limit, 2);
+                            $notifTitle = '⚠️ Budget Alert';
+                            $notifType = 'WARNING';
+                        } else {
+                            $notifMsg = '';
+                        }
+
+                        if ($notifMsg !== '') {
+                            $notifStmt = $conn->prepare("INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)");
+                            $notifStmt->bind_param("isss", $user_id, $notifTitle, $notifMsg, $notifType);
+                            $notifStmt->execute();
+                            $notifStmt->close();
+                        }
+                    }
+                    $budgetStmt->close();
+                }
+
+                header("Location: index.php?success=1");
+                exit();
+            } else {
+                $message = "❌ Error: " . $stmt->error;
+            }
+            $stmt->close();
         }
-        $stmt->close();
     }
 }
 ?>
@@ -343,6 +345,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <a href="add_transaction.php" class="nav-item <?php echo in_array($currentPage, ['add_transaction.php', 'edit_transaction.php'], true) ? 'active' : ''; ?>"><i class="bi bi-plus-circle-fill"></i><span>Add</span></a>
         <a href="transfer.php" class="nav-item <?php echo $currentPage === 'transfer.php' ? 'active' : ''; ?>"><i class="bi bi-arrow-left-right"></i><span>Transfer</span></a>
         <a href="manage_accounts.php" class="nav-item <?php echo $currentPage === 'manage_accounts.php' ? 'active' : ''; ?>"><i class="bi bi-wallet-fill"></i><span>Accounts</span></a>
+        <a href="set_budget.php" class="nav-item <?php echo $currentPage === 'set_budget.php' ? 'active' : ''; ?>"><i class="bi bi-wallet2"></i><span>Budget</span></a>
         <a href="savings_goals.php" class="nav-item <?php echo $currentPage === 'savings_goals.php' ? 'active' : ''; ?>"><i class="bi bi-graph-up-arrow"></i><span>Goals</span></a>
     </div>
 </div>

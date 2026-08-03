@@ -111,5 +111,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 </div>
 <script src="app.js"></script>
+<script>
+    (function(){
+        var input = document.getElementById('profilePictureInput');
+        if (!input) return;
+        var validTypes = ['image/jpeg','image/png','image/gif','image/webp'];
+        var maxBytes = 2097152; // 2 MB
+        input.addEventListener('change', function(){
+            var file = this.files && this.files[0];
+            if (!file) return;
+            if (validTypes.indexOf(file.type) === -1) {
+                alert('Invalid file type. Please choose a JPG, PNG, GIF, or WebP image.');
+                this.value = '';
+                return;
+            }
+            if (file.size > maxBytes) {
+                alert('File is too large. Please select an image smaller than 2 MB.');
+                this.value = '';
+                return;
+            }
+        });
+    })();
+</script>
 </body>
 </html>

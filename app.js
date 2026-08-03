@@ -97,72 +97,76 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    const resetBudgetsLink = document.querySelector('[data-reset-budgets]');
-    if (resetBudgetsLink) {
-        resetBudgetsLink.addEventListener('click', () => {
-            if (!window.confirm('Set all budgets to 0? This will remove all budget limits for this month.')) {
-                return;
-            }
+    // Budget page: only run these event bindings on the set_budget page (where `#budgetForm` exists)
+    const isBudgetPage = !!document.getElementById('budgetForm');
+    if (isBudgetPage) {
+        const resetBudgetsLink = document.querySelector('[data-reset-budgets]');
+        if (resetBudgetsLink) {
+            resetBudgetsLink.addEventListener('click', () => {
+                if (!window.confirm('Set all budgets to 0? This will remove all budget limits for this month.')) {
+                    return;
+                }
 
-            document.querySelectorAll('input[name^="budget["]').forEach((input) => {
-                input.value = '';
+                document.querySelectorAll('input[name^="budget["]').forEach((input) => {
+                    input.value = '';
+                });
+            });
+        }
+
+        const newBudgetIcon = document.getElementById('newBudgetIcon');
+        const newBudgetIconPreview = document.querySelector('[data-new-budget-icon-preview]');
+        if (newBudgetIcon && newBudgetIconPreview) {
+            newBudgetIcon.addEventListener('change', () => {
+                newBudgetIconPreview.className = `bi ${newBudgetIcon.value}`;
+            });
+        }
+
+        document.querySelectorAll('[data-budget-icon-select]').forEach((iconSelect) => {
+            iconSelect.addEventListener('change', () => {
+                const preview = document.querySelector(`[data-budget-icon-preview="${iconSelect.dataset.budgetIconSelect}"]`);
+                if (preview) {
+                    preview.className = `bi ${iconSelect.value}`;
+                }
             });
         });
-    }
 
-    const newBudgetIcon = document.getElementById('newBudgetIcon');
-    const newBudgetIconPreview = document.querySelector('[data-new-budget-icon-preview]');
-    if (newBudgetIcon && newBudgetIconPreview) {
-        newBudgetIcon.addEventListener('change', () => {
-            newBudgetIconPreview.className = `bi ${newBudgetIcon.value}`;
-        });
-    }
+        document.querySelectorAll('[data-budget-row-edit]').forEach((editButton) => {
+            editButton.addEventListener('click', () => {
+                const categoryId = editButton.dataset.budgetRowEdit;
+                const budgetInput = document.getElementById(`budget_${categoryId}`);
+                const iconSelect = document.querySelector(`[data-budget-icon-select="${categoryId}"]`);
+                const nameInput = document.querySelector(`[data-budget-name="${categoryId}"]`);
+                if (!budgetInput || !iconSelect || !nameInput) {
+                    return;
+                }
 
-    document.querySelectorAll('[data-budget-icon-select]').forEach((iconSelect) => {
-        iconSelect.addEventListener('change', () => {
-            const preview = document.querySelector(`[data-budget-icon-preview="${iconSelect.dataset.budgetIconSelect}"]`);
-            if (preview) {
-                preview.className = `bi ${iconSelect.value}`;
-            }
-        });
-    });
+                const editing = budgetInput.readOnly;
+                budgetInput.readOnly = !editing;
+                iconSelect.disabled = !editing;
+                iconSelect.classList.toggle('d-none', !editing);
+                nameInput.readOnly = !editing;
+                nameInput.classList.toggle('form-control-plaintext', !editing);
+                nameInput.classList.toggle('form-control', editing);
+                editButton.innerHTML = editing
+                    ? '<i class="bi bi-check2"></i>'
+                    : '<i class="bi bi-pencil"></i>';
+                editButton.title = editing ? 'Finish editing' : 'Edit budget';
 
-    document.querySelectorAll('[data-budget-row-edit]').forEach((editButton) => {
-        editButton.addEventListener('click', () => {
-            const categoryId = editButton.dataset.budgetRowEdit;
-            const budgetInput = document.getElementById(`budget_${categoryId}`);
-            const iconSelect = document.querySelector(`[data-budget-icon-select="${categoryId}"]`);
-            const nameInput = document.querySelector(`[data-budget-name="${categoryId}"]`);
-            if (!budgetInput || !iconSelect || !nameInput) {
-                return;
-            }
-
-            const editing = budgetInput.readOnly;
-            budgetInput.readOnly = !editing;
-            iconSelect.disabled = !editing;
-            iconSelect.classList.toggle('d-none', !editing);
-            nameInput.readOnly = !editing;
-            nameInput.classList.toggle('form-control-plaintext', !editing);
-            nameInput.classList.toggle('form-control', editing);
-            editButton.innerHTML = editing
-                ? '<i class="bi bi-check2"></i>'
-                : '<i class="bi bi-pencil"></i>';
-            editButton.title = editing ? 'Finish editing' : 'Edit budget';
-
-            if (editing) {
-                nameInput.focus();
-                nameInput.select();
-            }
-        });
-    });
-
-    const budgetForm = document.getElementById('budgetForm');
-    if (budgetForm) {
-        budgetForm.addEventListener('submit', () => {
-            document.querySelectorAll('[data-budget-icon-select]:disabled').forEach((iconSelect) => {
-                iconSelect.disabled = false;
+                if (editing) {
+                    nameInput.focus();
+                    nameInput.select();
+                }
             });
         });
+
+        const budgetForm = document.getElementById('budgetForm');
+        if (budgetForm) {
+            budgetForm.addEventListener('submit', () => {
+                document.querySelectorAll('[data-budget-icon-select]:disabled').forEach((iconSelect) => {
+                    iconSelect.disabled = false;
+                });
+            });
+        }
     }
 
     document.querySelectorAll('[data-budget-edit]').forEach((button) => {

@@ -69,10 +69,17 @@ if (isset($_GET['delete'])) {
     $checkResult = $checkStmt->get_result();
     $count = $checkResult->fetch_assoc()['count'];
     $checkStmt->close();
+
+    // Check if there are any transfers linked to this account
+    $transferStmt = $conn->prepare("SELECT COUNT(*) as count FROM transfers WHERE from_account_id = ? OR to_account_id = ?");
+    $transferStmt->bind_param("ii", $account_id, $account_id);
+    $transferStmt->execute();
+    $transferResult = $transferStmt->get_result();
+    $transferCount = $transferResult->fetch_assoc()['count'];
+    $transferStmt->close();
     
-    if ($count > 0) {
-        // Cannot delete - account has transactions
-        $message = "❌ Cannot delete this account! It has {$count} transaction(s) linked to it. Please delete the transactions first.";
+    if ($count > 0 || $transferCount > 0) {
+        $message = "❌ Cannot delete this account! It has {$count} transaction(s) and {$transferCount} transfer record(s) linked to it. Please remove those first.";
         $messageType = "danger";
     } else {
         // Safe to delete
@@ -303,6 +310,7 @@ $accountsResult = $accountsStmt->get_result();
         <a href="add_transaction.php" class="nav-item <?php echo in_array($currentPage, ['add_transaction.php', 'edit_transaction.php'], true) ? 'active' : ''; ?>"><i class="bi bi-plus-circle-fill"></i><span>Add</span></a>
         <a href="transfer.php" class="nav-item <?php echo $currentPage === 'transfer.php' ? 'active' : ''; ?>"><i class="bi bi-arrow-left-right"></i><span>Transfer</span></a>
         <a href="manage_accounts.php" class="nav-item <?php echo $currentPage === 'manage_accounts.php' ? 'active' : ''; ?>"><i class="bi bi-wallet-fill"></i><span>Accounts</span></a>
+        <a href="set_budget.php" class="nav-item <?php echo $currentPage === 'set_budget.php' ? 'active' : ''; ?>"><i class="bi bi-wallet2"></i><span>Budget</span></a>
         <a href="savings_goals.php" class="nav-item <?php echo $currentPage === 'savings_goals.php' ? 'active' : ''; ?>"><i class="bi bi-graph-up-arrow"></i><span>Goals</span></a>
     </div>
 </div>

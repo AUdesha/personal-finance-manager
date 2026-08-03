@@ -3,6 +3,7 @@ include 'config.php';
 
 // Check if user has reset session
 if (!isset($_SESSION['reset_user_id']) || !isset($_SESSION['reset_otp_hash'])) {
+    $_SESSION['error'] = 'Please request a new OTP first.';
     header("Location: forgot_password.php");
     exit();
 }
