@@ -136,14 +136,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const budgetInput = document.getElementById(`budget_${categoryId}`);
                 const iconSelect = document.querySelector(`[data-budget-icon-select="${categoryId}"]`);
                 const nameInput = document.querySelector(`[data-budget-name="${categoryId}"]`);
-                if (!budgetInput || !iconSelect || !nameInput) {
+                if (!budgetInput || !nameInput) {
+                    console.warn('Budget edit: missing elements for category', categoryId);
                     return;
                 }
 
                 const editing = budgetInput.readOnly;
                 budgetInput.readOnly = !editing;
-                iconSelect.disabled = !editing;
-                iconSelect.classList.toggle('d-none', !editing);
+                if (iconSelect) {
+                    iconSelect.disabled = !editing;
+                    iconSelect.classList.toggle('d-none', !editing);
+                }
                 nameInput.readOnly = !editing;
                 nameInput.classList.toggle('form-control-plaintext', !editing);
                 nameInput.classList.toggle('form-control', editing);
@@ -156,6 +159,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     nameInput.focus();
                     nameInput.select();
                 }
+                console.debug('Toggled editing for category', categoryId, 'editing=', editing);
+            });
+        });
+
+        // Attach global color input listeners so previews update immediately
+        document.querySelectorAll('input[type="color"]').forEach((c) => {
+            const id = c.id && c.id.split('_')[1];
+            if (!id) return;
+            const dot = document.getElementById(`color_dot_${id}`);
+            const text = document.getElementById(`color_text_${id}`);
+            if (dot) dot.style.backgroundColor = c.value;
+            if (text) text.textContent = c.value;
+            c.addEventListener('input', () => {
+                if (dot) dot.style.backgroundColor = c.value;
+                if (text) text.textContent = c.value;
             });
         });
 
@@ -165,6 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.querySelectorAll('[data-budget-icon-select]:disabled').forEach((iconSelect) => {
                     iconSelect.disabled = false;
                 });
+                document.querySelectorAll('input[type="color"]').forEach((c) => { c.disabled = false; });
             });
         }
     }

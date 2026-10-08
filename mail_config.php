@@ -12,6 +12,41 @@ require_once 'src/PHPMailer.php';
 require_once 'src/SMTP.php';
 
 /**
+ * Load environment variables from a .env file if they are not already set.
+ *
+ * @param string $path Absolute path to the .env file.
+ */
+function loadDotEnvFile(string $path): void
+{
+    if (!file_exists($path)) {
+        return;
+    }
+
+    $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#')) {
+            continue;
+        }
+
+        $parts = explode('=', $line, 2);
+        if (count($parts) !== 2) {
+            continue;
+        }
+
+        $name = trim($parts[0]);
+        $value = trim($parts[1]);
+        if ($name === '' || getenv($name) !== false) {
+            continue;
+        }
+
+        putenv("{$name}={$value}");
+        $_ENV[$name] = $value;
+        $_SERVER[$name] = $value;
+    }
+}
+
+/**
  * Send email using PHPMailer with SMTP
  * 
  * @param string $recipient Email address of the recipient
@@ -21,6 +56,9 @@ require_once 'src/SMTP.php';
  * @return bool True if sent successfully, false otherwise
  */
 function send_application_email($recipient, $subject, $body, $altBody = '') {
+    // Load environment variables from .env if they are not already loaded.
+    loadDotEnvFile(__DIR__ . '/../.env');
+
     $mail = new PHPMailer(true);
 
     try {
@@ -28,15 +66,46 @@ function send_application_email($recipient, $subject, $body, $altBody = '') {
         // SMTP CONFIGURATION - CHANGE THESE VALUES
         // ==========================================
         $mail->isSMTP();
-        $mail->Host       = getenv('SMTP_HOST') ?: '';
-        $mail->SMTPAuth   = true;
-        $mail->Username   = getenv('SMTP_USERNAME') ?: '';
-        $mail->Password   = getenv('SMTP_PASSWORD') ?: '';
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = getenv('SMTP_PORT') ?: 587;
 
-        if (empty($mail->Host) || empty($mail->Username) || empty($mail->Password)) {
-            error_log('Mail Error: SMTP configuration incomplete. Set SMTP_HOST, SMTP_USERNAME, and SMTP_PASSWORD.');
+        $smtpHostRaw = trim(getenv('SMTP_HOST') ?: '');
+        $smtpPortEnv = trim(getenv('SMTP_PORT') ?: '587');
+        $smtpUsername = trim(getenv('SMTP_USERNAME') ?: '');
+        $smtpPassword = trim(getenv('SMTP_PASSWORD') ?: '');
+        $smtpFromEmail = trim(getenv('SMTP_FROM_EMAIL') ?: $smtpUsername ?: 'noreply@localhost');
+
+        if ($smtpHostRaw === '') {
+            error_log('Mail Error: SMTP_HOST is not configured. Set SMTP_HOST in .env or supply a valid SMTP host.');
+            return false;
+        }
+
+        // Support SMTP_HOST values like "smtp.gmail.com:587" or "localhost:25"
+        $smtpHost = $smtpHostRaw;
+        $smtpPort = $smtpPortEnv;
+        if (preg_match('/^(.+?):(\d+)$/', $smtpHostRaw, $matches)) {
+            $smtpHost = trim($matches[1]);
+            $smtpPort = trim($matches[2]);
+        }
+
+        $mail->Host = $smtpHost;
+        $mail->Port = max(1, (int)$smtpPort);
+
+        $isLocalHost = in_array($smtpHost, ['localhost', '127.0.0.1'], true);
+        $mail->SMTPAuth = $smtpUsername !== '' && $smtpPassword !== '';
+        $mail->Username = $smtpUsername;
+        $mail->Password = $smtpPassword;
+
+        error_log(sprintf('Mail Debug: SMTP host=%s, port=%d, auth=%s', $mail->Host, $mail->Port, $mail->SMTPAuth ? 'yes' : 'no'));
+
+        if ($mail->SMTPAuth) {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->SMTPAutoTLS = true;
+        } else {
+            $mail->SMTPSecure = '';
+            $mail->SMTPAutoTLS = false;
+        }
+
+        if (!$mail->SMTPAuth && !$isLocalHost) {
+            error_log('Mail Error: SMTP authentication is disabled but SMTP_HOST is not localhost. Provide SMTP_USERNAME and SMTP_PASSWORD or use a local SMTP server.');
             return false;
         }
 
@@ -52,8 +121,7 @@ function send_application_email($recipient, $subject, $body, $altBody = '') {
         // ==========================================
         // SENDER & RECIPIENT
         // ==========================================
-        $fromEmail = getenv('SMTP_FROM_EMAIL') ?: $mail->Username;
-        $mail->setFrom($fromEmail, 'Personal Finance Manager');
+        $mail->setFrom($smtpFromEmail, 'Personal Finance Manager');
         $mail->addAddress($recipient);
 
         // ==========================================

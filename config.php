@@ -35,8 +35,17 @@ function loadDotEnv(string $path): void
 loadDotEnv(__DIR__ . '/.env');
 
 // Database connection settings: allow overrides via environment (.env)
-$host = getenv('DB_HOST') ?: 'localhost:3307';
+$host = getenv('DB_HOST') ?: 'localhost';
 $port = getenv('DB_PORT') ?: 3307; // XAMPP MySQL uses 3307 on this machine
+
+if (str_contains($host, ':')) {
+    [$hostPart, $portPart] = explode(':', $host, 2);
+    if (is_numeric($portPart)) {
+        $host = $hostPart;
+        $port = (int)$portPart;
+    }
+}
+
 $username = getenv('DB_USER') ?: 'root';
 $password = getenv('DB_PASS') ?: '';
 $database = getenv('DB_NAME') ?: 'personal_finance_manager';

@@ -31,6 +31,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && (isset($_POST['update_budgets']) || 
     $month_year = $_POST['month_year'] ?? date('Y-m-01');
     $budgetInputs = $_POST['budget'] ?? [];
     $iconInputs = $_POST['budget_icon'] ?? [];
+    $colorInputs = $_POST['budget_color'] ?? [];
     $nameInputs = $_POST['budget_name'] ?? [];
     $updateError = '';
     if (isset($_POST['add_budget'])) {
@@ -81,12 +82,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && (isset($_POST['update_budgets']) || 
         $categoryCheckStmt = $conn->prepare("SELECT category_id FROM categories WHERE category_id = ? AND user_id = ? AND type = 'EXPENSE'");
         $iconUpdateStmt = $conn->prepare("UPDATE categories SET icon = ? WHERE category_id = ? AND user_id = ? AND type = 'EXPENSE'");
         $nameUpdateStmt = $conn->prepare("UPDATE categories SET category_name = ? WHERE category_id = ? AND user_id = ? AND type = 'EXPENSE'");
+        $colorUpdateStmt = $conn->prepare("UPDATE categories SET color = ? WHERE category_id = ? AND user_id = ? AND type = 'EXPENSE'");
         $upsertStmt = $conn->prepare("INSERT INTO budgets (user_id, category_id, monthly_limit, month_year)
-                                      VALUES (?, ?, ?, ?)
-                                      ON DUPLICATE KEY UPDATE monthly_limit = VALUES(monthly_limit)");
+                          VALUES (?, ?, ?, ?)
+                          ON DUPLICATE KEY UPDATE monthly_limit = VALUES(monthly_limit)");
         $deleteStmt = $conn->prepare("DELETE FROM budgets WHERE user_id = ? AND category_id = ? AND month_year = ?");
 
-        if (!$categoryCheckStmt || !$iconUpdateStmt || !$nameUpdateStmt || !$upsertStmt || !$deleteStmt) {
+        if (!$categoryCheckStmt || !$iconUpdateStmt || !$nameUpdateStmt || !$colorUpdateStmt || !$upsertStmt || !$deleteStmt) {
             $updateError = $conn->error;
         }
     }
@@ -135,6 +137,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && (isset($_POST['update_budgets']) || 
                 }
             }
 
+            if (isset($colorInputs[$category_id])) {
+                $rawColor = trim((string)$colorInputs[$category_id]);
+                // Validate simple hex color like #RRGGBB or #RGB
+                if ($rawColor === '' || !preg_match('/^#([a-fA-F0-9]{3}|[a-fA-F0-9]{6})$/', $rawColor)) {
+                    $updateError = 'Invalid color value for a category.';
+                    break;
+                }
+                $colorUpdateStmt->bind_param("sii", $rawColor, $category_id, $user_id);
+                if (!$colorUpdateStmt->execute()) {
+                    $updateError = $colorUpdateStmt->error;
+                    break;
+                }
+            }
+
             if ($limit > 0) {
                 $upsertStmt->bind_param("iids", $user_id, $category_id, $limit, $month_year);
                 if (!$upsertStmt->execute()) {
@@ -153,6 +169,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && (isset($_POST['update_budgets']) || 
         $categoryCheckStmt->close();
         $iconUpdateStmt->close();
         $nameUpdateStmt->close();
+        $colorUpdateStmt->close();
         $upsertStmt->close();
         $deleteStmt->close();
     }
@@ -431,8 +448,11 @@ if (isset($_GET['success'])) {
                                             <input type="text" name="budget_name[<?php echo (int)$cat['category_id']; ?>]" class="form-control-plaintext fw-bold budget-name-input" data-budget-name="<?php echo (int)$cat['category_id']; ?>" value="<?php echo htmlspecialchars($cat['category_name']); ?>" readonly maxlength="100">
                                         </td>
                                         <td>
-                                            <span class="color-dot" style="background-color: <?php echo htmlspecialchars($cat['color']); ?>;"></span>
-                                            <small class="text-muted"><?php echo htmlspecialchars($cat['color']); ?></small>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <input type="color" name="budget_color[<?php echo (int)$cat['category_id']; ?>]" value="<?php echo htmlspecialchars($cat['color']); ?>" id="color_<?php echo (int)$cat['category_id']; ?>" class="form-control form-control-color" style="width:48px; padding:2px; height:36px;">
+                                                <span class="color-dot" id="color_dot_<?php echo (int)$cat['category_id']; ?>" style="background-color: <?php echo htmlspecialchars($cat['color']); ?>;"></span>
+                                                <small class="text-muted" id="color_text_<?php echo (int)$cat['category_id']; ?>"><?php echo htmlspecialchars($cat['color']); ?></small>
+                                            </div>
                                         </td>
                                         <td>
                                             <div class="input-group">
